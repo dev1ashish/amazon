@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from src.utils import download_images
+from utils import download_images
 import logging
 
 # Set up logging
