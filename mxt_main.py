@@ -123,6 +123,13 @@ def main():
         print(f"Test dataset size: {len(test_dataset)}")
         print(f"Sample test dataset size: {len(sample_test_dataset)}")
 
+        # Check if images are downloaded
+        for folder in ['images/train', 'images/test', 'images/sample_test']:
+            if not os.path.exists(folder) or len(os.listdir(folder)) == 0:
+                raise ValueError(f"Images not found in {folder}. Please run download.py first.")
+
+        print("Images found in all required directories.")
+
         train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
         val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
 
