@@ -7,11 +7,11 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Constants
-DATASET_FOLDER = '../dataset/'
+DATASET_FOLDER = 'dataset/'
 IMAGE_FOLDERS = {
-    'train': '../images/train',
-    'test': '../images/test',
-    'sample_test': '../images/sample_test'
+    'train': 'images/train',
+    'test': 'images/test',
+    'sample_test': 'images/sample_test'
 }
 
 def ensure_dir(directory):
