@@ -16,9 +16,9 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
 torch.backends.cudnn.benchmark = True
 
 # Constants
-BATCH_SIZE = 4
-ACCUMULATION_STEPS = 128
-LEARNING_RATE = 5e-5
+BATCH_SIZE = 2
+ACCUMULATION_STEPS = 256
+LEARNING_RATE = 1e-5
 NUM_EPOCHS = 20
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 VAL_SPLIT = 0.1
@@ -107,6 +107,8 @@ def main():
         num_units = len(all_units)
         print(f"Number of unique units: {num_units}")
 
+        
+
         print("Preparing datasets...")
         full_train_dataset = prepare_dataset('dataset/train.csv', 'images/train', tokenizer)
         train_size = int((1 - VAL_SPLIT) * len(full_train_dataset))
@@ -184,6 +186,8 @@ def main():
         print(f"An error occurred during execution: {str(e)}")
         import traceback
         traceback.print_exc()
+
+
 
 if __name__ == "__main__":
     main()
