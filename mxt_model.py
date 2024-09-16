@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers import T5ForConditionalGeneration
 from torchvision.models import resnet152, ResNet152_Weights
 import timm
+from torch.utils.checkpoint import checkpoint
 
 class MAG(nn.Module):
     def __init__(self, text_dim, img_dim, hidden_dim):
@@ -44,6 +45,18 @@ class MXT(nn.Module):
         
         self.unit_classifier = nn.Linear(self.text_model.config.d_model, num_units)
 
+        # Enable gradient checkpointing for text_model (T5)
+        self.text_model.gradient_checkpointing_enable()
+
+        # Enable gradient checkpointing for specific parts of ResNet and Xception
+        self.enable_checkpointing(self.img_model)
+        self.enable_checkpointing(self.xception_model)
+
+    def enable_checkpointing(self, model):
+        for module in model.modules():
+            if isinstance(module, nn.Module) and hasattr(module, 'gradient_checkpointing_enable'):
+                module.gradient_checkpointing_enable()
+
     def forward(self, input_ids, attention_mask, image, allowed_units):
         # Text encoding
         encoder_outputs = self.text_model.encoder(
@@ -54,7 +67,9 @@ class MXT(nn.Module):
         text_embeds = encoder_outputs.last_hidden_state
 
         # Image encoding with ResNet
-        img_features = self.img_model(image)
+        def img_forward(image):
+            return self.img_model(image)
+        img_features = checkpoint(img_forward, image)
         img_features = img_features.view(img_features.size(0), -1)  # Flatten the features
         img_features = img_features.unsqueeze(1).repeat(1, text_embeds.size(1), 1)
         
@@ -62,7 +77,9 @@ class MXT(nn.Module):
         fused_embeds = self.mag(text_embeds, img_features)
         
         # Image encoding with Xception
-        xception_features = self.xception_model(image)
+        def xception_forward(image):
+            return self.xception_model(image)
+        xception_features = checkpoint(xception_forward, image)
         xception_features = xception_features.view(xception_features.size(0), -1, 2048)
         xception_features = self.xception_projector(xception_features)
         xception_features = xception_features.expand(-1, fused_embeds.size(1), -1)
@@ -80,10 +97,16 @@ class MXT(nn.Module):
         
         decoder_last_hidden_state = decoder_outputs.last_hidden_state
         
-        # Predict value and unit
+    # Predict value and unit
         value_output = self.value_regressor(decoder_last_hidden_state).squeeze(-1)
         unit_logits = self.unit_classifier(decoder_last_hidden_state)
         unit_logits = unit_logits.masked_fill(~allowed_units.unsqueeze(1).bool(), float('-inf'))
+        
+        # Ensure consistent output shapes
+        value_output = value_output[:, -1]  # Take only the last token's prediction
+        unit_logits = unit_logits[:, -1, :]  # Take only the last token's prediction
+        
+        print(f"Model output shapes: value_output: {value_output.shape}, unit_logits: {unit_logits.shape}")
         
         return value_output, unit_logits
 
@@ -95,4 +118,12 @@ def load_mxt_model(device, num_units):
     # Remove the last classification layer from ResNet
     resnet = nn.Sequential(*list(resnet.children())[:-1])
     
-    return MXT(t5_model, resnet, xception, num_units).to(device)
+    model = MXT(t5_model, resnet, xception, num_units).to(device)
+    return model.half()  # Convert model to half precision
+
+# Helper function for debugging
+def print_model_output_shapes(model, sample_input):
+    input_ids, attention_mask, image, allowed_units = sample_input
+    value_output, unit_logits = model(input_ids, attention_mask, image, allowed_units)
+    print(f"Value output shape: {value_output.shape}")
+    print(f"Unit logits shape: {unit_logits.shape}")
